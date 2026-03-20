@@ -721,7 +721,7 @@ async function removeClient(docId, name) {
 
 function renderClients() {
     document.getElementById('clientList').innerHTML = appData.clients.map(c =>
-        `<span class="client-chip">${esc(c.name)} <button onclick="removeClient('${c.id}', '${escAttr(c.name)}')">&times;</button></span>`
+        `<span class="client-chip">${esc(c.name)} <button data-id="${c.id}" data-name="${escAttr(c.name)}" onclick="removeClient(this.dataset.id, this.dataset.name)">&times;</button></span>`
     ).join('');
 
     // Client summary table
@@ -1169,7 +1169,7 @@ function esc(str) {
     return d.innerHTML;
 }
 function escAttr(str) {
-    return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 function formatDate(dateStr) {
