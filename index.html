@@ -305,6 +305,7 @@
         <button onclick="document.getElementById('importCSVFile').click()">Import CSV</button>
         <button onclick="exportJSON()">Backup</button>
         <button onclick="document.getElementById('importFile').click()">Restore</button>
+        <button onclick="repairDates()" style="background:rgba(198,40,40,0.4);">Fix Dates</button>
         <input type="file" id="importCSVFile" accept=".csv" style="display:none" onchange="importCSV(event)">
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
     </div>
@@ -495,15 +496,96 @@ function startListeners() {
 
     // Listen to entries collection
     db.collection('entries').orderBy('date', 'desc').onSnapshot(snapshot => {
-        appData.entries = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        }));
+        appData.entries = snapshot.docs.map(doc => {
+            const d = doc.data();
+            // Normalize date: handle Firestore Timestamps or other formats
+            let date = d.date;
+            if (date && typeof date === 'object' && date.toDate) {
+                date = date.toDate().toISOString().split('T')[0];
+            } else if (date && typeof date !== 'string') {
+                date = String(date);
+            }
+            return {
+                id: doc.id,
+                client: d.client || '',
+                date: date || '',
+                volumeTW: Number(d.volumeTW) || 0,
+                volumeLW: Number(d.volumeLW) || 0,
+                coffeeTotal: Number(d.coffeeTotal) || 0,
+                invoicedAmount: d.invoicedAmount || ''
+            };
+        });
         dataReady = true;
         document.getElementById('loadingOverlay').classList.add('hidden');
         refreshUI();
         checkSeedData();
     }, err => console.error('Entries listener error:', err));
+}
+
+// --- REPAIR DATES ---
+async function repairDates() {
+    if (!confirm('This will delete ALL entries and clients from the database and re-import from the original spreadsheet data. Continue?')) return;
+
+    try {
+        // Fetch seed data
+        const resp = await fetch('seed-data.json');
+        if (!resp.ok) { alert('Could not load seed-data.json'); return; }
+        const seed = await resp.json();
+
+        // Delete all existing entries
+        const entriesSnap = await db.collection('entries').get();
+        let batch = db.batch();
+        let count = 0;
+        for (const doc of entriesSnap.docs) {
+            batch.delete(doc.ref);
+            count++;
+            if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (count % 400 !== 0) await batch.commit();
+
+        // Delete all existing clients
+        const clientsSnap = await db.collection('clients').get();
+        batch = db.batch();
+        count = 0;
+        for (const doc of clientsSnap.docs) {
+            batch.delete(doc.ref);
+            count++;
+            if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (count % 400 !== 0) await batch.commit();
+
+        // Re-import clients
+        batch = db.batch();
+        count = 0;
+        for (const name of seed.clients) {
+            batch.set(db.collection('clients').doc(), { name: name });
+            count++;
+            if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (count % 400 !== 0) await batch.commit();
+
+        // Re-import entries with explicit string dates
+        batch = db.batch();
+        count = 0;
+        for (const e of seed.entries) {
+            batch.set(db.collection('entries').doc(), {
+                client: String(e.client),
+                date: String(e.date),
+                volumeTW: Number(e.volumeTW) || 0,
+                volumeLW: Number(e.volumeLW) || 0,
+                coffeeTotal: Number(e.coffeeTotal) || 0,
+                invoicedAmount: String(e.invoicedAmount || '')
+            });
+            count++;
+            if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+        }
+        if (count % 400 !== 0) await batch.commit();
+
+        alert('Done! All ' + seed.entries.length + ' entries re-imported with correct dates.');
+    } catch (err) {
+        console.error('Repair error:', err);
+        alert('Error: ' + err.message);
+    }
 }
 
 // --- SYNC STATUS ---
