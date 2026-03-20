@@ -302,8 +302,10 @@
     <div class="header-actions">
         <span id="syncStatus" class="sync-status online"><span class="dot"></span> Synced</span>
         <button onclick="exportCSV()">Export CSV</button>
+        <button onclick="document.getElementById('importCSVFile').click()">Import CSV</button>
         <button onclick="exportJSON()">Backup</button>
         <button onclick="document.getElementById('importFile').click()">Restore</button>
+        <input type="file" id="importCSVFile" accept=".csv" style="display:none" onchange="importCSV(event)">
         <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
     </div>
 </header>
@@ -845,6 +847,164 @@ function exportCSV() {
 
     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
     download(csv, 'kiwi-nutz-export.csv', 'text/csv');
+}
+
+async function importCSV(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function(ev) {
+        try {
+            const text = ev.target.result.trim();
+            const lines = text.split(/\r?\n/);
+            if (lines.length < 2) { alert('CSV file is empty or has no data rows.'); return; }
+
+            // Parse header to detect columns
+            const header = parseCSVRow(lines[0]).map(h => h.trim().toLowerCase());
+
+            // Try to detect column mapping
+            const colMap = {};
+            header.forEach((h, i) => {
+                if (h.includes('client') || h.includes('name') || h.includes('company')) colMap.client = i;
+                else if (h.includes('date') || h.includes('week')) colMap.date = i;
+                else if (h === 'volume tw' || h === 'vol tw' || h.includes('this week') || h.includes('volume tw')) colMap.volumeTW = i;
+                else if (h === 'volume lw' || h === 'vol lw' || h.includes('last week') || h.includes('volume lw')) colMap.volumeLW = i;
+                else if (h.includes('coffee total') || h === 'total') colMap.coffeeTotal = i;
+                else if (h.includes('invoic') || h.includes('amount') || h.includes('cost') || h.includes('price')) colMap.invoicedAmount = i;
+            });
+
+            // If only client column found, treat as client-only import
+            const clientOnly = colMap.client !== undefined && colMap.date === undefined;
+
+            const rows = [];
+            for (let i = 1; i < lines.length; i++) {
+                if (!lines[i].trim()) continue;
+                const cols = parseCSVRow(lines[i]);
+                rows.push(cols);
+            }
+
+            if (clientOnly) {
+                // Client-only import
+                const newClients = [];
+                const existingNames = new Set(appData.clients.map(c => c.name.toLowerCase()));
+                for (const cols of rows) {
+                    const name = (cols[colMap.client] || '').trim();
+                    if (name && !existingNames.has(name.toLowerCase())) {
+                        newClients.push(name);
+                        existingNames.add(name.toLowerCase());
+                    }
+                }
+                if (newClients.length === 0) { alert('No new clients found in CSV.'); return; }
+                if (!confirm(`Import ${newClients.length} new client(s)?`)) return;
+
+                let batch = db.batch();
+                let count = 0;
+                for (const name of newClients) {
+                    batch.set(db.collection('clients').doc(), { name: name });
+                    count++;
+                    if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+                }
+                if (count % 400 !== 0) await batch.commit();
+                alert(`Imported ${newClients.length} client(s)!`);
+            } else {
+                // Full entry import
+                if (colMap.client === undefined) { alert('Could not find a "Client" column in the CSV header.'); return; }
+                if (colMap.date === undefined) { alert('Could not find a "Date" or "Week Ending" column in the CSV header.'); return; }
+
+                const entries = [];
+                const newClientNames = new Set();
+                const existingNames = new Set(appData.clients.map(c => c.name.toLowerCase()));
+
+                for (const cols of rows) {
+                    const client = (cols[colMap.client] || '').trim();
+                    if (!client) continue;
+
+                    let date = (cols[colMap.date] || '').trim();
+                    // Try to parse common date formats
+                    date = normalizeDate(date);
+                    if (!date) continue;
+
+                    const volumeTW = parseInt(cols[colMap.volumeTW]) || 0;
+                    const volumeLW = parseInt(cols[colMap.volumeLW]) || 0;
+                    const coffeeTotal = colMap.coffeeTotal !== undefined ? parseInt(cols[colMap.coffeeTotal]) || 0 : volumeTW - volumeLW;
+                    const invoicedAmount = colMap.invoicedAmount !== undefined ? (cols[colMap.invoicedAmount] || '').trim() : '';
+
+                    entries.push({ client, date, volumeTW, volumeLW, coffeeTotal, invoicedAmount });
+
+                    if (!existingNames.has(client.toLowerCase())) {
+                        newClientNames.add(client);
+                        existingNames.add(client.toLowerCase());
+                    }
+                }
+
+                if (entries.length === 0) { alert('No valid entries found in CSV.'); return; }
+                if (!confirm(`Import ${entries.length} entries and ${newClientNames.size} new client(s)?`)) return;
+
+                // Add new clients
+                let batch = db.batch();
+                let count = 0;
+                for (const name of newClientNames) {
+                    batch.set(db.collection('clients').doc(), { name: name });
+                    count++;
+                    if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+                }
+                if (count % 400 !== 0 && count > 0) { await batch.commit(); }
+
+                // Add entries
+                batch = db.batch();
+                count = 0;
+                for (const e of entries) {
+                    batch.set(db.collection('entries').doc(), e);
+                    count++;
+                    if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
+                }
+                if (count % 400 !== 0) await batch.commit();
+                alert(`Imported ${entries.length} entries!`);
+            }
+        } catch (err) {
+            alert('Error importing CSV: ' + err.message);
+            console.error(err);
+        }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+}
+
+function parseCSVRow(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuotes) {
+            if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
+            else if (ch === '"') { inQuotes = false; }
+            else { current += ch; }
+        } else {
+            if (ch === '"') { inQuotes = true; }
+            else if (ch === ',') { result.push(current); current = ''; }
+            else { current += ch; }
+        }
+    }
+    result.push(current);
+    return result;
+}
+
+function normalizeDate(str) {
+    if (!str) return null;
+    // Already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+    // MM/DD/YYYY
+    let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    // DD/MM/YYYY (try if month > 12, otherwise assume MM/DD)
+    // MM-DD-YYYY
+    m = str.match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+    if (m) return `${m[3]}-${m[1].padStart(2,'0')}-${m[2].padStart(2,'0')}`;
+    // Try Date.parse as fallback
+    const d = new Date(str);
+    if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    return null;
 }
 
 function exportJSON() {
