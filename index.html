@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kiwi Nutz - Coffee Supply Tracker</title>
     <link rel="icon" type="image/png" href="logo.png">
+    <link rel="preconnect" href="https://firestore.googleapis.com">
+    <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -290,7 +292,7 @@
 </head>
 <body>
 
-<div id="loadingOverlay" class="loading-overlay">Loading...</div>
+<div id="loadingOverlay" class="loading-overlay hidden">Loading...</div>
 
 <header>
     <div class="header-brand">
