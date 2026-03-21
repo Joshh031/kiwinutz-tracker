@@ -336,7 +336,7 @@
                     <div class="form-group">
                         <label>Client</label>
                         <div style="display:flex; gap:0.4rem;">
-                            <select id="entryClient" required style="flex:1;">
+                            <select id="entryClient" required style="flex:1;" onchange="autofillLastWeek(true)">
                                 <option value="">Select client...</option>
                             </select>
                             <button type="button" class="btn btn-primary" style="padding:0.4rem 0.75rem; font-size:1.1rem; line-height:1;" onclick="quickAddClient()">+</button>
@@ -766,13 +766,13 @@ function calcCoffeeTotal() {
     document.getElementById('coffeeTotal').value = tw - lw;
 }
 
-function autofillLastWeek() {
+function autofillLastWeek(silent) {
     const client = document.getElementById('entryClient').value;
-    if (!client) { alert('Select a client first.'); return; }
+    if (!client) { if (!silent) alert('Select a client first.'); return; }
     const clientEntries = appData.entries
         .filter(e => e.client === client)
         .sort((a, b) => b.date.localeCompare(a.date));
-    if (clientEntries.length === 0) { alert('No previous entries for this client.'); return; }
+    if (clientEntries.length === 0) { if (!silent) alert('No previous entries for this client.'); return; }
     document.getElementById('volumeLW').value = clientEntries[0].volumeTW;
     calcCoffeeTotal();
 }
