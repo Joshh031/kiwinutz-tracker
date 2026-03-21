@@ -725,7 +725,10 @@ function renderClients() {
     ).join('');
 
     // Client summary table
-    const entries = appData.entries;
+    const today = new Date().toISOString().split('T')[0];
+    const entries = appData.entries.filter(e =>
+        !(e.date > today && e.volumeTW === 0 && e.volumeLW === 0 && e.coffeeTotal === 0)
+    );
     const clientStats = {};
     entries.forEach(e => {
         if (!clientStats[e.client]) clientStats[e.client] = { visits: 0, lastDate: '', lastVol: 0, totalCups: 0 };
@@ -819,7 +822,11 @@ const PAGE_SIZE = 50;
 let currentPage = 1;
 
 function getFilteredEntries() {
-    let entries = [...appData.entries];
+    const today = new Date().toISOString().split('T')[0];
+    // Hide future zero-value placeholder rows
+    let entries = [...appData.entries].filter(e =>
+        !(e.date > today && e.volumeTW === 0 && e.volumeLW === 0 && e.coffeeTotal === 0)
+    );
     const cf = document.getElementById('filterClient').value;
     const from = document.getElementById('filterFrom').value;
     const to = document.getElementById('filterTo').value;
@@ -879,7 +886,10 @@ function renderHistory() {
 
 // --- DASHBOARD ---
 function renderDashboard() {
-    const entries = appData.entries;
+    const today = new Date().toISOString().split('T')[0];
+    const entries = appData.entries.filter(e =>
+        !(e.date > today && e.volumeTW === 0 && e.volumeLW === 0 && e.coffeeTotal === 0)
+    );
 
     const totalVisits = entries.length;
     const uniqueClients = new Set(entries.map(e => e.client)).size;
