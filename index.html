@@ -771,12 +771,10 @@ function autofillLastWeek(silent) {
     console.log('autofill called, client:', client, 'silent:', silent, 'entries:', appData.entries.length);
     if (!client) { if (!silent) alert('Select a client first.'); return; }
     const clientEntries = appData.entries
-        .filter(e => e.client === client)
+        .filter(e => e.client === client && e.volumeTW > 0)
         .sort((a, b) => b.date.localeCompare(a.date));
-    console.log('matched entries:', clientEntries.length);
     if (clientEntries.length === 0) { if (!silent) alert('No previous entries for this client.'); return; }
     document.getElementById('volumeLW').value = clientEntries[0].volumeTW;
-    console.log('set volumeLW to:', clientEntries[0].volumeTW);
     calcCoffeeTotal();
 }
 
