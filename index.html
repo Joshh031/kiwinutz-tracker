@@ -352,7 +352,7 @@
                             oninput="calcCoffeeTotal()">
                     </div>
                     <div class="form-group">
-                        <label>Volume Last Week</label>
+                        <label>Volume Last Visit</label>
                         <input type="number" id="volumeLW" min="0" step="1" required
                             oninput="calcCoffeeTotal()">
                     </div>
@@ -367,7 +367,7 @@
                 </div>
                 <div class="form-actions">
                     <button type="submit" class="btn btn-primary">Save Entry</button>
-                    <button type="button" class="btn btn-secondary" onclick="autofillLastWeek()">Auto-fill Last Week</button>
+                    <button type="button" class="btn btn-secondary" onclick="autofillLastWeek()">Auto-fill Last Visit</button>
                     <span id="saveMsg" style="color:#2e7d32; font-size:0.9rem;"></span>
                 </div>
             </form>
@@ -393,7 +393,7 @@
                             <th>Week Ending</th>
                             <th>Client</th>
                             <th>Vol TW</th>
-                            <th>Vol LW</th>
+                            <th>Vol LV</th>
                             <th>Coffee Total</th>
                             <th>Invoiced</th>
                             <th></th>
@@ -950,7 +950,7 @@ async function importCSV(event) {
                 if (h.includes('client') || h.includes('name') || h.includes('company')) colMap.client = i;
                 else if (h.includes('date') || h.includes('week')) colMap.date = i;
                 else if (h === 'volume tw' || h === 'vol tw' || h.includes('this week') || h.includes('volume tw')) colMap.volumeTW = i;
-                else if (h === 'volume lw' || h === 'vol lw' || h.includes('last week') || h.includes('volume lw')) colMap.volumeLW = i;
+                else if (h === 'volume lw' || h === 'vol lw' || h === 'vol lv' || h.includes('last week') || h.includes('last visit') || h.includes('volume lw') || h.includes('volume lv')) colMap.volumeLW = i;
                 else if (h.includes('coffee total') || h === 'total') colMap.coffeeTotal = i;
                 else if (h.includes('invoic') || h.includes('amount') || h.includes('cost') || h.includes('price')) colMap.invoicedAmount = i;
             });
