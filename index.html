@@ -456,11 +456,12 @@ function localToday() {
 
 // A "phantom" row is one with volumeTW=0, volumeLW=0, coffeeTotal=0, and no invoicedAmount.
 // These were auto-generated as schedule placeholders and should never be shown or stored.
+// A phantom row has no real volume data — both TW and LV are zero.
+// These are schedule placeholders, not real service visits.
+// Note: some placeholders carry an invoicedAmount (flat fee clients) — we still treat
+// them as phantom for display purposes since there's no actual cup reading.
 function isPhantomRow(e) {
-  return e.volumeTW === 0 &&
-    e.volumeLW === 0 &&
-    e.coffeeTotal === 0 &&
-    (!e.invoicedAmount || e.invoicedAmount.trim() === '');
+  return e.volumeTW === 0 && e.volumeLW === 0;
 }
 
 // --- REAL-TIME LISTENERS ---
