@@ -467,7 +467,7 @@ function isPhantomRow(e) {
 
 // --- REAL-TIME LISTENERS ---
 function startListeners() {
-  db.collection('clients').orderBy('name').onSnapshot(snapshot => {
+  db.collection('clients').orderBy('name').onSnapshot({ includeMetadataChanges: true }, snapshot => {
     appData.clients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
     if (dataReady) refreshUI();
   }, err => {
@@ -477,7 +477,7 @@ function startListeners() {
     updateSyncStatus();
   });
 
-  db.collection('entries').orderBy('date', 'desc').onSnapshot(snapshot => {
+  db.collection('entries').orderBy('date', 'desc').onSnapshot({ includeMetadataChanges: true }, snapshot => {
     hasPendingWrites = snapshot.metadata.hasPendingWrites;
     readingFromCache = snapshot.metadata.fromCache;
     listenerError = null;
