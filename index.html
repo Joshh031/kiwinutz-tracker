@@ -469,9 +469,18 @@ function startListeners() {
   db.collection('clients').orderBy('name').onSnapshot(snapshot => {
     appData.clients = snapshot.docs.map(doc => ({ id: doc.id, name: doc.data().name }));
     if (dataReady) refreshUI();
-  }, err => console.error('Clients listener error:', err));
+  }, err => {
+    console.error('Clients listener error:', err);
+    listenerError = err.code || err.message || 'unknown';
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    updateSyncStatus();
+  });
 
   db.collection('entries').orderBy('date', 'desc').onSnapshot(snapshot => {
+    hasPendingWrites = snapshot.metadata.hasPendingWrites;
+    readingFromCache = snapshot.metadata.fromCache;
+    listenerError = null;
+    updateSyncStatus();
     appData.entries = snapshot.docs.map(doc => {
       const d = doc.data();
       let date = d.date;
@@ -498,7 +507,12 @@ function startListeners() {
     document.getElementById('loadingOverlay').classList.add('hidden');
     refreshUI();
     checkSeedData();
-  }, err => console.error('Entries listener error:', err));
+  }, err => {
+    console.error('Entries listener error:', err);
+    listenerError = err.code || err.message || 'unknown';
+    document.getElementById('loadingOverlay').classList.add('hidden');
+    updateSyncStatus();
+  });
 }
 
 // --- PURGE PHANTOM ROWS (new) ---
@@ -610,14 +624,27 @@ async function repairDates() {
 }
 
 // --- SYNC STATUS ---
+let hasPendingWrites = false;
+let readingFromCache = false;
+let listenerError = null;
+
 function updateSyncStatus() {
   const el = document.getElementById('syncStatus');
-  if (navigator.onLine) {
-    el.className = 'sync-status online';
-    el.innerHTML = '<span class="dot"></span> Synced';
-  } else {
+  if (listenerError) {
+    el.className = 'sync-status offline';
+    el.innerHTML = '<span class="dot"></span> Error: ' + listenerError;
+  } else if (!navigator.onLine) {
     el.className = 'sync-status offline';
     el.innerHTML = '<span class="dot"></span> Offline';
+  } else if (hasPendingWrites) {
+    el.className = 'sync-status offline';
+    el.innerHTML = '<span class="dot"></span> Saving...';
+  } else if (readingFromCache) {
+    el.className = 'sync-status offline';
+    el.innerHTML = '<span class="dot"></span> Cached';
+  } else {
+    el.className = 'sync-status online';
+    el.innerHTML = '<span class="dot"></span> Synced';
   }
 }
 window.addEventListener('online', updateSyncStatus);
@@ -710,8 +737,13 @@ async function quickAddClient() {
     alert('Client already exists.');
     return;
   }
-  await db.collection('clients').add({ name: trimmed });
-  setTimeout(() => { document.getElementById('entryClient').value = trimmed; }, 500);
+  try {
+    await db.collection('clients').add({ name: trimmed });
+    setTimeout(() => { document.getElementById('entryClient').value = trimmed; }, 500);
+  } catch (err) {
+    console.error('quickAddClient error:', err);
+    alert('Could not add client: ' + (err.message || err.code || err));
+  }
 }
 
 async function addClient() {
@@ -722,13 +754,23 @@ async function addClient() {
     alert('Client already exists.');
     return;
   }
-  await db.collection('clients').add({ name: name });
-  input.value = '';
+  try {
+    await db.collection('clients').add({ name: name });
+    input.value = '';
+  } catch (err) {
+    console.error('addClient error:', err);
+    alert('Could not add client: ' + (err.message || err.code || err));
+  }
 }
 
 async function removeClient(docId, name) {
   if (!confirm(`Remove "${name}"? Their service history will remain.`)) return;
-  await db.collection('clients').doc(docId).delete();
+  try {
+    await db.collection('clients').doc(docId).delete();
+  } catch (err) {
+    console.error('removeClient error:', err);
+    alert('Could not remove client: ' + (err.message || err.code || err));
+  }
 }
 
 function renderClients() {
@@ -805,23 +847,35 @@ async function saveEntry(e) {
     coffeeTotal: Number(document.getElementById('coffeeTotal').value),
     invoicedAmount: document.getElementById('invoicedAmount').value.trim()
   };
-  await db.collection('entries').add(entry);
-  if (!appData.clients.some(c => c.name.toLowerCase() === client.toLowerCase())) {
-    await db.collection('clients').add({ name: client });
-  }
-  document.getElementById('volumeTW').value = '';
-  document.getElementById('volumeLW').value = '';
-  document.getElementById('coffeeTotal').value = '';
-  document.getElementById('invoicedAmount').value = '';
-  document.getElementById('entryDate').value = getNextSunday();
   const msg = document.getElementById('saveMsg');
-  msg.textContent = 'Saved!';
-  setTimeout(() => msg.textContent = '', 2000);
+  try {
+    await db.collection('entries').add(entry);
+    if (!appData.clients.some(c => c.name.toLowerCase() === client.toLowerCase())) {
+      await db.collection('clients').add({ name: client });
+    }
+    document.getElementById('volumeTW').value = '';
+    document.getElementById('volumeLW').value = '';
+    document.getElementById('coffeeTotal').value = '';
+    document.getElementById('invoicedAmount').value = '';
+    document.getElementById('entryDate').value = getNextSunday();
+    msg.style.color = '#2e7d32';
+    msg.textContent = 'Saved!';
+    setTimeout(() => msg.textContent = '', 2000);
+  } catch (err) {
+    console.error('saveEntry error:', err);
+    msg.style.color = '#c62828';
+    msg.textContent = 'Save failed: ' + (err.message || err.code || err);
+  }
 }
 
 async function deleteEntry(docId) {
   if (!confirm('Delete this entry?')) return;
-  await db.collection('entries').doc(docId).delete();
+  try {
+    await db.collection('entries').doc(docId).delete();
+  } catch (err) {
+    console.error('deleteEntry error:', err);
+    alert('Could not delete entry: ' + (err.message || err.code || err));
+  }
 }
 
 // --- HISTORY ---
