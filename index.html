@@ -329,6 +329,43 @@ tr:hover td { background: #faf8f5; }
             <label>Invoiced Amount</label>
             <input type="text" id="invoicedAmount" placeholder="e.g. 300">
           </div>
+          <div class="form-group">
+            <label>Coffee Bags</label>
+            <div style="display:flex; gap:0.5rem;">
+              <div style="flex:1; display:flex; flex-direction:column; gap:0.2rem;">
+                <span style="font-size:0.7rem; color:#8d6e63; text-transform:uppercase; letter-spacing:0.5px;">Regular</span>
+                <select id="bagsRegular">
+                  <option value="">—</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                  <option value="9">9</option>
+                  <option value="10+">10+</option>
+                </select>
+              </div>
+              <div style="flex:1; display:flex; flex-direction:column; gap:0.2rem;">
+                <span style="font-size:0.7rem; color:#8d6e63; text-transform:uppercase; letter-spacing:0.5px;">Decaf</span>
+                <select id="bagsDecaf">
+                  <option value="">—</option>
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                  <option value="6">6</option>
+                  <option value="7">7</option>
+                  <option value="8">8</option>
+                  <option value="9">9</option>
+                  <option value="10+">10+</option>
+                </select>
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn btn-primary">Save Entry</button>
@@ -360,6 +397,8 @@ tr:hover td { background: #faf8f5; }
               <th>Vol TW</th>
               <th>Vol LV</th>
               <th>Coffee Total</th>
+              <th>Regular</th>
+              <th>Decaf</th>
               <th>Invoiced</th>
               <th></th>
             </tr>
@@ -501,7 +540,9 @@ function startListeners() {
         volumeTW: Number(d.volumeTW) || 0,
         volumeLW: Number(d.volumeLW) || 0,
         coffeeTotal: Number(d.coffeeTotal) || 0,
-        invoicedAmount: d.invoicedAmount || ''
+        invoicedAmount: d.invoicedAmount || '',
+        bagsRegular: d.bagsRegular || '',
+        bagsDecaf: d.bagsDecaf || ''
       };
     });
     dataReady = true;
@@ -846,7 +887,9 @@ async function saveEntry(e) {
     volumeTW: Number(document.getElementById('volumeTW').value),
     volumeLW: Number(document.getElementById('volumeLW').value),
     coffeeTotal: Number(document.getElementById('coffeeTotal').value),
-    invoicedAmount: document.getElementById('invoicedAmount').value.trim()
+    invoicedAmount: document.getElementById('invoicedAmount').value.trim(),
+    bagsRegular: document.getElementById('bagsRegular').value,
+    bagsDecaf: document.getElementById('bagsDecaf').value
   };
   const msg = document.getElementById('saveMsg');
   try {
@@ -858,6 +901,8 @@ async function saveEntry(e) {
     document.getElementById('volumeLW').value = '';
     document.getElementById('coffeeTotal').value = '';
     document.getElementById('invoicedAmount').value = '';
+    document.getElementById('bagsRegular').value = '';
+    document.getElementById('bagsDecaf').value = '';
     document.getElementById('entryDate').value = getNextSunday();
     msg.style.color = '#2e7d32';
     msg.textContent = 'Saved!';
@@ -931,6 +976,8 @@ function renderHistory() {
       <td>${e.volumeTW.toLocaleString()}</td>
       <td>${e.volumeLW.toLocaleString()}</td>
       <td class="${totalClass}">${e.coffeeTotal.toLocaleString()}</td>
+      <td>${esc(e.bagsRegular || '—')}</td>
+      <td>${esc(e.bagsDecaf || '—')}</td>
       <td>${esc(e.invoicedAmount || '—')}</td>
       <td><button class="btn btn-danger" onclick="deleteEntry('${e.id}')">Del</button></td>
     </tr>`;
@@ -999,12 +1046,12 @@ function renderDashboard() {
 // --- EXPORT / IMPORT ---
 function exportCSV() {
   if (appData.entries.length === 0) { alert('No entries to export.'); return; }
-  const rows = [['Client', 'Week Ending', 'Volume TW', 'Volume LW', 'Coffee Total', 'Invoiced Amount']];
+  const rows = [['Client', 'Week Ending', 'Volume TW', 'Volume LW', 'Coffee Total', 'Invoiced Amount', 'Regular Bags', 'Decaf Bags']];
   [...appData.entries]
     .filter(e => !isPhantomRow(e))
     .sort((a, b) => a.client.localeCompare(b.client) || a.date.localeCompare(b.date))
     .forEach(e => {
-      rows.push([e.client, e.date, e.volumeTW, e.volumeLW, e.coffeeTotal, e.invoicedAmount || '']);
+      rows.push([e.client, e.date, e.volumeTW, e.volumeLW, e.coffeeTotal, e.invoicedAmount || '', e.bagsRegular || '', e.bagsDecaf || '']);
     });
   const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
   download(csv, 'kiwi-nutz-export.csv', 'text/csv');
@@ -1112,7 +1159,9 @@ function exportJSON() {
       volumeTW: e.volumeTW,
       volumeLW: e.volumeLW,
       coffeeTotal: e.coffeeTotal,
-      invoicedAmount: e.invoicedAmount
+      invoicedAmount: e.invoicedAmount,
+      bagsRegular: e.bagsRegular,
+      bagsDecaf: e.bagsDecaf
     }))
   };
   download(JSON.stringify(data, null, 2), 'kiwi-nutz-backup.json', 'application/json');
@@ -1179,7 +1228,9 @@ async function importJSON(event) {
           volumeTW: Number(e.volumeTW) || 0,
           volumeLW: Number(e.volumeLW) || 0,
           coffeeTotal: Number(e.coffeeTotal) || 0,
-          invoicedAmount: String(e.invoicedAmount || '')
+          invoicedAmount: String(e.invoicedAmount || ''),
+          bagsRegular: String(e.bagsRegular || ''),
+          bagsDecaf: String(e.bagsDecaf || '')
         });
         count++;
         if (count % 400 === 0) { await batch.commit(); batch = db.batch(); }
